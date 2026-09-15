@@ -10,7 +10,7 @@ _pkgname=quiet-loki
 _electron=electron32
 _nodever=20.20.1
 pkgver=r1.g60e81232
-pkgrel=10
+pkgrel=11
 pkgdesc="Quiet desktop chat with dual Tor + Lokinet overlay (.onion and .loki)"
 arch=('x86_64')
 url="https://github.com/unmellow/quiet-loki"
@@ -55,6 +55,10 @@ prepare() {
   sed -i 's|`${process.resourcesPath}`|`${process.env.QUIET_RESOURCES || process.resourcesPath}`|g' \
     packages/desktop/src/main/main.ts || true
 
+  # Accept 52-char Lokinet SNApp names in invite p= hosts (not only 56-char onions).
+  sed -i 's#const ONION_ADDRESS_REGEX = /\^\[a-z0-9\]{56}\$/g#const ONION_ADDRESS_REGEX = /^([a-z0-9]{56}|[a-z0-9]{52}(?:\\.loki)?)$/i#' \
+    packages/common/src/invitationLink/invitationLink.validator.ts || true
+
   _ensure_local_nvm
 }
 
@@ -85,12 +89,12 @@ build() {
     npx lerna run build --scope '@quiet/types'
     npx lerna run build --scope '@quiet/logger'
     npx lerna run build --scope '@quiet/eslint-config' || true
-    npx lerna run build --scope '@quiet/common'
     npx lerna run build --scope '@quiet/identity'
     npx lerna run build --scope '@quiet/node-common' || true
     npx lerna run build --scope '@quiet/state-manager'
   fi
 
+  npx lerna run build --scope '@quiet/common'
   npx lerna run build --scope '@quiet/backend' || true
   (cd packages/backend && npm run webpack:prod)
   npx lerna run build --scope 'backend-bundle' || true
