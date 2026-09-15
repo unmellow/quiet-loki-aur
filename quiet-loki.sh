@@ -2,6 +2,7 @@
 # Launch against Arch's electron32 (Electron package guidelines).
 export LOKINET_BIN="${LOKINET_BIN:-/usr/bin/lokinet}"
 export LOKINET_API="${LOKINET_API:-http://127.0.0.1:1190}"
+export QUIET_RESOURCES="${QUIET_RESOURCES:-/usr/lib/quiet-loki/resources}"
 
 APP=/usr/lib/quiet-loki
 if [ -f "$APP/package.json" ]; then
