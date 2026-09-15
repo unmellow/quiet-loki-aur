@@ -5,34 +5,22 @@ Arch package sources for [unmellow/quiet-loki](https://github.com/unmellow/quiet
 ## Local build
 
 ```bash
-sudo pacman -S --needed base-devel git nodejs npm python python-setuptools
+sudo pacman -S --needed base-devel git python python-setuptools pnpm
 git clone https://github.com/unmellow/quiet-loki-aur.git
 cd quiet-loki-aur
 makepkg -si
 ```
 
-The first build compiles the Quiet monorepo + Electron app and takes a long time and a lot of disk.
+The PKGBUILD downloads **Node 20.20.1** (Quiet's pinned engine) instead of using Arch's current Node. Do not use system Node 26.
+
+Submodules are checked out at the SHAs recorded in Quiet-Loki. The stock `npm run pull:submodules` (`--remote --no-fetch`) is skipped because `3rd-party/qss` tracks `auth/main-baseline` and that remote ref is not present after a shallow `--no-fetch`.
+
+QSS docker bootstrap is also skipped; the desktop client does not need a running storage service to build.
 
 ## Runtime
-
-Install [lokinet](https://github.com/oxen-io/lokinet) (AUR/`lokinet` if packaged) if you want `.loki` peers. Tor is still bundled for `.onion`.
 
 ```bash
 quiet-loki
 ```
 
-Env overrides: `LOKINET_BIN`, `LOKINET_API`.
-
-## Publish to AUR
-
-```bash
-git clone ssh://aur@aur.archlinux.org/quiet-loki-git.git
-cp PKGBUILD .SRCINFO quiet-loki.desktop quiet-loki.sh quiet-loki-git/
-cd quiet-loki-git
-makepkg --printsrcinfo > .SRCINFO
-git add PKGBUILD .SRCINFO quiet-loki.desktop quiet-loki.sh
-git commit -m "initial import: quiet-loki-git"
-git push
-```
-
-After a Quiet-Loki commit, bump with `makepkg` so `pkgver()` refreshes, then update `.SRCINFO`.
+Optional: install lokinet for `.loki` peers. Tor stays bundled for `.onion`.
