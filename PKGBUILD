@@ -9,7 +9,7 @@ pkgname=quiet-loki-git
 _pkgname=quiet-loki
 _electron=electron32
 pkgver=r1.g60e81232
-pkgrel=4
+pkgrel=5
 pkgdesc="Quiet desktop chat with dual Tor + Lokinet overlay (.onion and .loki)"
 arch=('x86_64')
 url="https://github.com/unmellow/quiet-loki"
@@ -31,8 +31,6 @@ sha256sums=('SKIP'
 _ensure_local_nvm() {
   command -v nvm >/dev/null 2>&1 && nvm deactivate && nvm unload || true
   export NVM_DIR="${srcdir}/.nvm"
-  # init-nvm.sh returns 3 when .nvmrc is not installed yet
-  # shellcheck source=/usr/share/nvm/init-nvm.sh
   source /usr/share/nvm/init-nvm.sh || [[ $? != 1 ]]
 }
 
@@ -72,7 +70,30 @@ build() {
   npm run build:noise || true
   npm run build:orbitdb || true
 
-  npx lerna bootstrap --ignore-scripts --ignore '@quiet/mobile' --ignore 'e2e-tests'
+  # Link workspace packages. Do not --ignore-scripts here: each @quiet/*
+  # package's prepare script is `npm run build` (tsc -> lib/), which webpack needs.
+  npx lerna bootstrap --ignore '@quiet/mobile' --ignore 'e2e-tests'
+
+  # Guarantee compile order if prepare was skipped on a package.
+  npx lerna run build --scope '@quiet/types'
+  npx lerna run build --scope '@quiet/logger'
+  npx lerna run build --scope '@quiet/eslint-config' || true
+  npx lerna run build --scope '@quiet/common'
+  npx lerna run build --scope '@quiet/identity' || true
+  npx lerna run build --scope '@quiet/node-common' || true
+  npx lerna run build --scope '@quiet/state-manager'
+  npx lerna run build --scope 'backend-bundle' || true
+
+  test -e packages/desktop/node_modules/@quiet/common \
+    || ln -sfn ../../common packages/desktop/node_modules/@quiet/common
+  test -e packages/desktop/node_modules/@quiet/types \
+    || ln -sfn ../../types packages/desktop/node_modules/@quiet/types
+  test -e packages/desktop/node_modules/@quiet/state-manager \
+    || ln -sfn ../../state-manager packages/desktop/node_modules/@quiet/state-manager
+  test -e packages/desktop/node_modules/@quiet/node-common \
+    || ln -sfn ../../node-common packages/desktop/node_modules/@quiet/node-common
+  test -e packages/desktop/node_modules/@quiet/logger \
+    || ln -sfn ../../logger packages/desktop/node_modules/@quiet/logger
 
   cd packages/desktop
   npm run copyBinaries || true
@@ -98,26 +119,21 @@ package() {
   [[ -z "$unpacked" ]] && unpacked=$(find "${srcdir}/${_pkgname}/packages/desktop" -type d -name 'linux-unpacked' | head -n1 || true)
   [[ -n "$unpacked" ]] || { echo "linux-unpacked not found" >&2; return 1; }
 
-  # Keep JS app payload only. Throw away the copied Electron runtime.
   install -d "${pkgdir}/usr/lib/${_pkgname}"
   if [[ -d "${unpacked}/resources/app" ]]; then
     cp -a "${unpacked}/resources/app/." "${pkgdir}/usr/lib/${_pkgname}/"
   elif [[ -f "${unpacked}/resources/app.asar" ]]; then
-    install -Dm644 "${unpacked}/resources/app.asar" "${pkgdir}/usr/lib/${_pkgname}/app.asar"
-    [[ -d "${unpacked}/resources/app.asar.unpacked" ]] && \
-      cp -a "${unpacked}/resources/app.asar.unpacked" "${pkgdir}/usr/lib/${_pkgname}/app.asar.unpacked"
-    # asar-only layout: launcher still points at the directory; electron loads app.asar from cwd/resources.
     install -d "${pkgdir}/usr/lib/${_pkgname}/resources"
-    mv "${pkgdir}/usr/lib/${_pkgname}/app.asar" "${pkgdir}/usr/lib/${_pkgname}/resources/app.asar"
-    [[ -d "${pkgdir}/usr/lib/${_pkgname}/app.asar.unpacked" ]] && \
-      mv "${pkgdir}/usr/lib/${_pkgname}/app.asar.unpacked" "${pkgdir}/usr/lib/${_pkgname}/resources/app.asar.unpacked"
+    install -Dm644 "${unpacked}/resources/app.asar" "${pkgdir}/usr/lib/${_pkgname}/resources/app.asar"
+    [[ -d "${unpacked}/resources/app.asar.unpacked" ]] && \
+      cp -a "${unpacked}/resources/app.asar.unpacked" "${pkgdir}/usr/lib/${_pkgname}/resources/app.asar.unpacked"
   else
     echo "neither resources/app nor app.asar found in ${unpacked}" >&2
     return 1
   fi
 
-  # Bundled Tor bits live next to the app in extraResources
   if [[ -d "${unpacked}/resources/tor" ]]; then
+    install -d "${pkgdir}/usr/lib/${_pkgname}/resources"
     cp -a "${unpacked}/resources/tor" "${pkgdir}/usr/lib/${_pkgname}/resources/tor"
   fi
 
