@@ -10,7 +10,7 @@ _pkgname=quiet-loki
 _electron=electron32
 _nodever=20.20.1
 pkgver=r1.g60e81232
-pkgrel=8
+pkgrel=9
 pkgdesc="Quiet desktop chat with dual Tor + Lokinet overlay (.onion and .loki)"
 arch=('x86_64')
 url="https://github.com/unmellow/quiet-loki"
@@ -28,7 +28,7 @@ source=(
 )
 sha256sums=('SKIP'
             '760a180527a1fe2549f3c12834c26b473970c87f1dbd96f06e4d1dc4ae901e75'
-            'c71cb73811f607943515c7217ac6d3e5e59e7ab5eda26031c3d8c576ddc99af9')
+            'c55c139a7c6d221efa249bdaa057fe9793fb6a18464d5ec7c07f61ccdeb7fddc')
 
 _ensure_local_nvm() {
   command -v nvm >/dev/null 2>&1 && nvm deactivate && nvm unload || true
@@ -62,10 +62,6 @@ build() {
 
   cd "${srcdir}/${_pkgname}"
 
-  # Neutralize lifecycle hooks that explode during lerna bootstrap:
-  #  - husky wants a .git dir in npm cache clones
-  #  - @quiet/backend prepare = webpack (needs compiled workspace first)
-  #  - @quiet/desktop prepare = webpack configtest + tsc
   find . -name package.json -print0 | xargs -0 sed -i \
     -e 's/"prepare": "husky[^"]*"/"prepare": "true"/g' \
     -e 's/"prepare": "npm run webpack"/"prepare": "true"/g' \
@@ -78,7 +74,6 @@ build() {
   npm run build:noise || true
   npm run build:orbitdb || true
 
-  # Link only. Compile in a defined order afterwards.
   npx lerna bootstrap --ignore-scripts --ignore '@quiet/mobile' --ignore 'e2e-tests'
 
   npx lerna run build --scope '@quiet/types'
