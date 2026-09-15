@@ -10,7 +10,7 @@ _pkgname=quiet-loki
 _electron=electron32
 _nodever=20.20.1
 pkgver=r1.g60e81232
-pkgrel=9
+pkgrel=10
 pkgdesc="Quiet desktop chat with dual Tor + Lokinet overlay (.onion and .loki)"
 arch=('x86_64')
 url="https://github.com/unmellow/quiet-loki"
@@ -28,7 +28,7 @@ source=(
 )
 sha256sums=('SKIP'
             '760a180527a1fe2549f3c12834c26b473970c87f1dbd96f06e4d1dc4ae901e75'
-            'c55c139a7c6d221efa249bdaa057fe9793fb6a18464d5ec7c07f61ccdeb7fddc')
+            'a71142372c7b50cffacebf74e91e6b179e215d9e822417b3f2f7eb56e5239a90')
 
 _ensure_local_nvm() {
   command -v nvm >/dev/null 2>&1 && nvm deactivate && nvm unload || true
@@ -45,8 +45,16 @@ pkgver() {
 
 prepare() {
   cd "${srcdir}/${_pkgname}"
+  git fetch origin develop || true
+  git checkout develop || true
+  git reset --hard origin/develop || true
   git submodule sync --quiet
   git submodule update --init --recursive --jobs "$(nproc)"
+
+  # System electron32 sets process.resourcesPath to /usr/lib/electron32/resources.
+  sed -i 's|`${process.resourcesPath}`|`${process.env.QUIET_RESOURCES || process.resourcesPath}`|g' \
+    packages/desktop/src/main/main.ts || true
+
   _ensure_local_nvm
 }
 
@@ -67,24 +75,24 @@ build() {
     -e 's/"prepare": "npm run webpack"/"prepare": "true"/g' \
     -e 's/"prepare": "npm run webpack:configtest:dev[^"]*"/"prepare": "true"/g' || true
 
-  npm install --ignore-scripts --cache "${srcdir}/npm-cache" lerna@6.6.2 typescript@4.9.5
-  npm install --ignore-scripts --cache "${srcdir}/npm-cache"
+  if [[ ! -d node_modules/lerna ]]; then
+    npm install --ignore-scripts --cache "${srcdir}/npm-cache" lerna@6.6.2 typescript@4.9.5
+    npm install --ignore-scripts --cache "${srcdir}/npm-cache"
+    npm run build:auth || true
+    npm run build:noise || true
+    npm run build:orbitdb || true
+    npx lerna bootstrap --ignore-scripts --ignore '@quiet/mobile' --ignore 'e2e-tests'
+    npx lerna run build --scope '@quiet/types'
+    npx lerna run build --scope '@quiet/logger'
+    npx lerna run build --scope '@quiet/eslint-config' || true
+    npx lerna run build --scope '@quiet/common'
+    npx lerna run build --scope '@quiet/identity'
+    npx lerna run build --scope '@quiet/node-common' || true
+    npx lerna run build --scope '@quiet/state-manager'
+  fi
 
-  npm run build:auth || true
-  npm run build:noise || true
-  npm run build:orbitdb || true
-
-  npx lerna bootstrap --ignore-scripts --ignore '@quiet/mobile' --ignore 'e2e-tests'
-
-  npx lerna run build --scope '@quiet/types'
-  npx lerna run build --scope '@quiet/logger'
-  npx lerna run build --scope '@quiet/eslint-config' || true
-  npx lerna run build --scope '@quiet/common'
-  npx lerna run build --scope '@quiet/identity'
-  npx lerna run build --scope '@quiet/node-common' || true
-  npx lerna run build --scope '@quiet/state-manager'
   npx lerna run build --scope '@quiet/backend' || true
-  (cd packages/backend && npm run webpack:prod) || true
+  (cd packages/backend && npm run webpack:prod)
   npx lerna run build --scope 'backend-bundle' || true
 
   mkdir -p packages/desktop/node_modules/@quiet
@@ -132,9 +140,15 @@ package() {
     return 1
   fi
 
+  local tordir=""
   if [[ -d "${unpacked}/resources/tor" ]]; then
-    install -d "${pkgdir}/usr/lib/${_pkgname}/resources"
-    cp -a "${unpacked}/resources/tor" "${pkgdir}/usr/lib/${_pkgname}/resources/tor"
+    tordir="${unpacked}/resources/tor"
+  elif [[ -d "${srcdir}/${_pkgname}/3rd-party/tor/linux" ]]; then
+    tordir="${srcdir}/${_pkgname}/3rd-party/tor/linux"
+  fi
+  if [[ -n "$tordir" ]]; then
+    install -d "${pkgdir}/usr/lib/${_pkgname}/resources/tor"
+    cp -a "${tordir}/." "${pkgdir}/usr/lib/${_pkgname}/resources/tor/"
   fi
 
   install -Dm755 "${srcdir}/quiet-loki.sh" "${pkgdir}/usr/bin/quiet-loki"
