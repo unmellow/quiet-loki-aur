@@ -1,26 +1,41 @@
-# quiet-loki-git (AUR)
+# quiet-loki-git
 
-Arch package sources for [unmellow/quiet-loki](https://github.com/unmellow/quiet-loki).
+AUR sources for [unmellow/quiet-loki](https://github.com/unmellow/quiet-loki).
+Packaging follows:
 
-## Local build
+- [AUR submission guidelines](https://wiki.archlinux.org/title/AUR_submission_guidelines)
+- [Electron package guidelines](https://wiki.archlinux.org/title/Electron_package_guidelines)
+- [Node.js package guidelines](https://wiki.archlinux.org/title/Node.js_package_guidelines)
+- [VCS package guidelines](https://wiki.archlinux.org/title/VCS_package_guidelines)
 
-```bash
-sudo pacman -S --needed base-devel git python python-setuptools pnpm
-git clone https://github.com/unmellow/quiet-loki-aur.git
-cd quiet-loki-aur
-makepkg -si
+## What this does *not* do
+
+It does **not** ship a private Electron binary. `electron-builder --dir` is pointed at Arch `electron32`; `package()` keeps `resources/app` (or `app.asar`) plus bundled Tor under `/usr/lib/quiet-loki`. The launcher is:
+
+```sh
+exec electron32 /usr/lib/quiet-loki "$@"
 ```
 
-The PKGBUILD downloads **Node 20.20.1** (Quiet's pinned engine) instead of using Arch's current Node. Do not use system Node 26.
+Node 20.20.1 is only a **build** dependency, installed via `nvm` from Quiet's `.nvmrc`. It is not a runtime dep.
 
-Submodules are checked out at the SHAs recorded in Quiet-Loki. The stock `npm run pull:submodules` (`--remote --no-fetch`) is skipped because `3rd-party/qss` tracks `auth/main-baseline` and that remote ref is not present after a shallow `--no-fetch`.
-
-QSS docker bootstrap is also skipped; the desktop client does not need a running storage service to build.
-
-## Runtime
+## Build
 
 ```bash
-quiet-loki
+sudo pacman -S --needed base-devel git npm nvm python python-setuptools pnpm electron32
+git pull
+makepkg -Csi
 ```
 
-Optional: install lokinet for `.loki` peers. Tor stays bundled for `.onion`.
+## Publish to aur.archlinux.org
+
+AUR only accepts the `master` branch. Package sources in this GitHub repo are licensed 0BSD (`LICENSE`) so they stay eligible for later [official repo promotion rules](https://rfc.archlinux.page/0040-license-package-sources/#aur).
+
+```bash
+git -c init.defaultBranch=master clone ssh://aur@aur.archlinux.org/quiet-loki-git.git
+cp PKGBUILD .SRCINFO LICENSE quiet-loki.desktop quiet-loki.sh quiet-loki-git/
+cd quiet-loki-git
+makepkg --printsrcinfo > .SRCINFO
+git add PKGBUILD .SRCINFO LICENSE quiet-loki.desktop quiet-loki.sh
+git commit -m "initial import: quiet-loki-git"
+git push
+```
