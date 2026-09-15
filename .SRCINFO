@@ -1,7 +1,7 @@
 pkgbase = quiet-loki-git
 	pkgdesc = Quiet desktop chat with dual Tor + Lokinet overlay (.onion and .loki)
 	pkgver = 9.0.2.r0.g60e81232
-	pkgrel = 2
+	pkgrel = 3
 	url = https://github.com/unmellow/quiet-loki
 	arch = x86_64
 	license = GPL-3.0-or-later

@@ -4,7 +4,7 @@ pkgname=quiet-loki-git
 _pkgname=quiet-loki
 _nodever=20.20.1
 pkgver=9.0.2.r0.g60e81232
-pkgrel=2
+pkgrel=3
 pkgdesc="Quiet desktop chat with dual Tor + Lokinet overlay (.onion and .loki)"
 arch=('x86_64')
 url="https://github.com/unmellow/quiet-loki"
@@ -35,19 +35,13 @@ pkgver() {
 prepare() {
   cd "${srcdir}/${_pkgname}"
 
-  # Recorded SHAs only. Do NOT use --remote / npm run pull:submodules:
-  # qss nests TryQuiet/auth on branch auth/main-baseline, and --no-fetch --remote
-  # looks for refs/remotes/origin/auth/main-baseline which is not fetched.
   git submodule sync
   git submodule update --init --jobs 4
-
-  # Recurse into nested modules using the commits their parents recorded.
   git submodule update --init --recursive --jobs 4 || {
-    echo "warning: nested submodule recurse failed; continuing with first-level checkouts" >&2
-    # qss expects 3rd-party/auth on auth/main-baseline — fetch that ref explicitly
+    echo "warning: nested submodule recurse failed; continuing" >&2
     if [[ -d 3rd-party/qss/.git || -f 3rd-party/qss/.git ]]; then
       git -C 3rd-party/qss submodule sync || true
-      git -C 3rd-party/qss fetch --recurse-submodules origin 'auth/main-baseline:refs/remotes/origin/auth/main-baseline' || true
+      git -C 3rd-party/qss fetch origin 'auth/main-baseline:refs/remotes/origin/auth/main-baseline' || true
       git -C 3rd-party/qss submodule update --init --recursive || true
     fi
   }
@@ -58,22 +52,31 @@ build() {
   export PATH="${nodehome}/bin:${PATH}"
   export HOME="${srcdir}/.home"
   export npm_config_cache="${srcdir}/.npm"
+  # husky's prepare script looks for .git and dies inside npm cache clones
+  export HUSKY=0
+  export HUSKY_SKIP_INSTALL=1
+  export npm_config_ignore_scripts=true
   mkdir -p "$HOME" "$npm_config_cache"
 
   echo "Using $(node -v) / npm $(npm -v)"
 
   cd "${srcdir}/${_pkgname}"
 
+  # Neutralize leftover prepare/husky hooks in any package.json we will install
+  find . -name package.json -print0 | xargs -0 sed -i \
+    -e 's/"prepare": "husky[^"]*"/"prepare": "true"/g' \
+    -e 's/"prepare": "husky install"/"prepare": "true"/g' || true
+
   npm i --ignore-scripts lerna@6.6.2 typescript@4.9.5
   npm i --ignore-scripts
 
-  # Build first-level 3rd-party libs. Skip pull:submodules (broken --remote).
-  # Skip build:qss docker bootstrap; desktop does not need a running QSS.
   npm run build:auth || true
   npm run build:noise || true
   npm run build:orbitdb || true
 
-  npx lerna bootstrap --ignore-scripts || npx lerna bootstrap
+  # Desktop only. @quiet/mobile pulls RN + husky and is not packaged.
+  npx lerna bootstrap --ignore-scripts --ignore '@quiet/mobile' --ignore 'e2e-tests' \
+    || npx lerna bootstrap --ignore '@quiet/mobile' --ignore 'e2e-tests'
 
   cd packages/desktop
   npm run copyBinaries || true
