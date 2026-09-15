@@ -8,3 +8,4 @@ Type=Application
 Categories=Network;InstantMessaging;
 MimeType=x-scheme-handler/quiet;
 StartupWMClass=Quiet
+StartupNotify=true

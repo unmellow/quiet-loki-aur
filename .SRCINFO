@@ -1,18 +1,17 @@
 pkgbase = quiet-loki-git
 	pkgdesc = Quiet desktop chat with dual Tor + Lokinet overlay (.onion and .loki)
 	pkgver = r1.g60e81232
-	pkgrel = 4
+	pkgrel = 6
 	url = https://github.com/unmellow/quiet-loki
 	arch = x86_64
 	license = GPL-3.0-or-later
+	options = !strip
+	options = !debug
 	makedepends = git
 	makedepends = npm
 	makedepends = nvm
 	makedepends = python
 	makedepends = python-setuptools
-	makedepends = gcc
-	makedepends = make
-	makedepends = patch
 	makedepends = pnpm
 	depends = electron32
 	depends = libxss
@@ -20,13 +19,13 @@ pkgbase = quiet-loki-git
 	depends = gtk3
 	depends = alsa-lib
 	optdepends = lokinet: dial and publish .loki SNApp addresses
-	provides = quiet-loki
+	provides = quiet-loki=r1.g60e81232
 	conflicts = quiet-loki
-	source = git+https://github.com/unmellow/quiet-loki.git#branch=develop
+	source = quiet-loki::git+https://github.com/unmellow/quiet-loki.git#branch=develop
 	source = quiet-loki.desktop
 	source = quiet-loki.sh
 	sha256sums = SKIP
-	sha256sums = 4615a2a41e4289237d89ce32a263bc3ddfa0e1c134d866c09338e716c3b47a3e
-	sha256sums = 78ec1e5d8e136e28e4d1c1f15e014906d2cdddbab9203d4df7c34c1ef382413f
+	sha256sums = 760a180527a1fe2549f3c12834c26b473970c87f1dbd96f06e4d1dc4ae901e75
+	sha256sums = c71cb73811f607943515c7217ac6d3e5e59e7ab5eda26031c3d8c576ddc99af9
 
 pkgname = quiet-loki-git

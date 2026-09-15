@@ -3,6 +3,9 @@
 !.SRCINFO
 !.gitignore
 !LICENSE
+!LICENSES
+!LICENSES/**
+!REUSE.toml
 !README.md
 !quiet-loki.sh
 !quiet-loki.desktop

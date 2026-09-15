@@ -9,28 +9,30 @@ pkgname=quiet-loki-git
 _pkgname=quiet-loki
 _electron=electron32
 pkgver=r1.g60e81232
-pkgrel=5
+pkgrel=6
 pkgdesc="Quiet desktop chat with dual Tor + Lokinet overlay (.onion and .loki)"
 arch=('x86_64')
 url="https://github.com/unmellow/quiet-loki"
 license=('GPL-3.0-or-later')
 depends=("$_electron" 'libxss' 'nss' 'gtk3' 'alsa-lib')
-makedepends=('git' 'npm' 'nvm' 'python' 'python-setuptools' 'gcc' 'make' 'patch' 'pnpm')
+makedepends=('git' 'npm' 'nvm' 'python' 'python-setuptools' 'pnpm')
 optdepends=('lokinet: dial and publish .loki SNApp addresses')
-provides=('quiet-loki')
+provides=("quiet-loki=${pkgver}")
 conflicts=('quiet-loki')
+options=('!strip' '!debug')
 source=(
-  "git+https://github.com/unmellow/quiet-loki.git#branch=develop"
+  "${_pkgname}::git+https://github.com/unmellow/quiet-loki.git#branch=develop"
   "quiet-loki.desktop"
   "quiet-loki.sh"
 )
 sha256sums=('SKIP'
-            '4615a2a41e4289237d89ce32a263bc3ddfa0e1c134d866c09338e716c3b47a3e'
-            '78ec1e5d8e136e28e4d1c1f15e014906d2cdddbab9203d4df7c34c1ef382413f')
+            '760a180527a1fe2549f3c12834c26b473970c87f1dbd96f06e4d1dc4ae901e75'
+            'c71cb73811f607943515c7217ac6d3e5e59e7ab5eda26031c3d8c576ddc99af9')
 
 _ensure_local_nvm() {
   command -v nvm >/dev/null 2>&1 && nvm deactivate && nvm unload || true
   export NVM_DIR="${srcdir}/.nvm"
+  # init-nvm.sh returns 1 when nvm was not previously loaded; that is expected.
   source /usr/share/nvm/init-nvm.sh || [[ $? != 1 ]]
 }
 
@@ -41,9 +43,8 @@ pkgver() {
 
 prepare() {
   cd "${srcdir}/${_pkgname}"
-  git submodule sync
-  git submodule update --init --jobs 4
-  git submodule update --init --recursive --jobs 4 || true
+  git submodule sync --quiet
+  git submodule update --init --recursive --jobs "$(nproc)"
 
   _ensure_local_nvm
   nvm install
@@ -84,16 +85,11 @@ build() {
   npx lerna run build --scope '@quiet/state-manager'
   npx lerna run build --scope 'backend-bundle' || true
 
-  test -e packages/desktop/node_modules/@quiet/common \
-    || ln -sfn ../../common packages/desktop/node_modules/@quiet/common
-  test -e packages/desktop/node_modules/@quiet/types \
-    || ln -sfn ../../types packages/desktop/node_modules/@quiet/types
-  test -e packages/desktop/node_modules/@quiet/state-manager \
-    || ln -sfn ../../state-manager packages/desktop/node_modules/@quiet/state-manager
-  test -e packages/desktop/node_modules/@quiet/node-common \
-    || ln -sfn ../../node-common packages/desktop/node_modules/@quiet/node-common
-  test -e packages/desktop/node_modules/@quiet/logger \
-    || ln -sfn ../../logger packages/desktop/node_modules/@quiet/logger
+  mkdir -p packages/desktop/node_modules/@quiet
+  for _pkg in common types state-manager node-common logger; do
+    [[ -e "packages/desktop/node_modules/@quiet/${_pkg}" ]] && continue
+    ln -sfn "../../${_pkg}" "packages/desktop/node_modules/@quiet/${_pkg}"
+  done
 
   cd packages/desktop
   npm run copyBinaries || true
@@ -116,7 +112,6 @@ package() {
     "${srcdir}/${_pkgname}/packages/desktop/release/linux-unpacked"; do
     [[ -d "$d" ]] && unpacked="$d" && break
   done
-  [[ -z "$unpacked" ]] && unpacked=$(find "${srcdir}/${_pkgname}/packages/desktop" -type d -name 'linux-unpacked' | head -n1 || true)
   [[ -n "$unpacked" ]] || { echo "linux-unpacked not found" >&2; return 1; }
 
   install -d "${pkgdir}/usr/lib/${_pkgname}"
@@ -124,9 +119,12 @@ package() {
     cp -a "${unpacked}/resources/app/." "${pkgdir}/usr/lib/${_pkgname}/"
   elif [[ -f "${unpacked}/resources/app.asar" ]]; then
     install -d "${pkgdir}/usr/lib/${_pkgname}/resources"
-    install -Dm644 "${unpacked}/resources/app.asar" "${pkgdir}/usr/lib/${_pkgname}/resources/app.asar"
-    [[ -d "${unpacked}/resources/app.asar.unpacked" ]] && \
-      cp -a "${unpacked}/resources/app.asar.unpacked" "${pkgdir}/usr/lib/${_pkgname}/resources/app.asar.unpacked"
+    install -Dm644 "${unpacked}/resources/app.asar" \
+      "${pkgdir}/usr/lib/${_pkgname}/resources/app.asar"
+    if [[ -d "${unpacked}/resources/app.asar.unpacked" ]]; then
+      cp -a "${unpacked}/resources/app.asar.unpacked" \
+        "${pkgdir}/usr/lib/${_pkgname}/resources/app.asar.unpacked"
+    fi
   else
     echo "neither resources/app nor app.asar found in ${unpacked}" >&2
     return 1
@@ -138,11 +136,14 @@ package() {
   fi
 
   install -Dm755 "${srcdir}/quiet-loki.sh" "${pkgdir}/usr/bin/quiet-loki"
-  install -Dm644 "${srcdir}/quiet-loki.desktop" "${pkgdir}/usr/share/applications/quiet-loki.desktop"
+  install -Dm644 "${srcdir}/quiet-loki.desktop" \
+    "${pkgdir}/usr/share/applications/quiet-loki.desktop"
 
-  local icon
-  icon=$(find "${srcdir}/${_pkgname}/packages/desktop" -name 'icon.png' | head -n1 || true)
-  [[ -n "$icon" ]] && install -Dm644 "$icon" "${pkgdir}/usr/share/pixmaps/quiet-loki.png"
+  local icon="${srcdir}/${_pkgname}/packages/desktop/build/icon.png"
+  if [[ -f "$icon" ]]; then
+    install -Dm644 "$icon" "${pkgdir}/usr/share/icons/hicolor/512x512/apps/quiet-loki.png"
+    install -Dm644 "$icon" "${pkgdir}/usr/share/pixmaps/quiet-loki.png"
+  fi
 
   install -Dm644 "${srcdir}/${_pkgname}/LICENSE.md" \
     "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
