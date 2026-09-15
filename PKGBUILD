@@ -2,14 +2,15 @@
 # shellcheck shell=bash disable=SC2034,SC2154
 #
 # Electron: system electron32 + resources/app (wiki Electron package guidelines).
-# Node for the *build* only: nvm + .nvmrc (wiki Node.js package guidelines).
+# Node for the *build* only: nvm + Node 20.20.1 (Quiet engines).
 # Do not vendor a private Electron runtime in the installed package.
 
 pkgname=quiet-loki-git
 _pkgname=quiet-loki
 _electron=electron32
+_nodever=20.20.1
 pkgver=r1.g60e81232
-pkgrel=6
+pkgrel=7
 pkgdesc="Quiet desktop chat with dual Tor + Lokinet overlay (.onion and .loki)"
 arch=('x86_64')
 url="https://github.com/unmellow/quiet-loki"
@@ -32,8 +33,9 @@ sha256sums=('SKIP'
 _ensure_local_nvm() {
   command -v nvm >/dev/null 2>&1 && nvm deactivate && nvm unload || true
   export NVM_DIR="${srcdir}/.nvm"
-  # init-nvm.sh returns 1 when nvm was not previously loaded; that is expected.
   source /usr/share/nvm/init-nvm.sh || [[ $? != 1 ]]
+  nvm install "${_nodever}"
+  nvm use "${_nodever}"
 }
 
 pkgver() {
@@ -45,19 +47,18 @@ prepare() {
   cd "${srcdir}/${_pkgname}"
   git submodule sync --quiet
   git submodule update --init --recursive --jobs "$(nproc)"
-
   _ensure_local_nvm
-  nvm install
 }
 
 build() {
   _ensure_local_nvm
-  nvm use
 
   export HOME="${srcdir}/.home"
   export HUSKY=0
   export HUSKY_SKIP_INSTALL=1
   mkdir -p "$HOME"
+
+  echo "Using $(node -v) / npm $(npm -v)"
 
   cd "${srcdir}/${_pkgname}"
 
@@ -71,11 +72,8 @@ build() {
   npm run build:noise || true
   npm run build:orbitdb || true
 
-  # Link workspace packages. Do not --ignore-scripts here: each @quiet/*
-  # package's prepare script is `npm run build` (tsc -> lib/), which webpack needs.
   npx lerna bootstrap --ignore '@quiet/mobile' --ignore 'e2e-tests'
 
-  # Guarantee compile order if prepare was skipped on a package.
   npx lerna run build --scope '@quiet/types'
   npx lerna run build --scope '@quiet/logger'
   npx lerna run build --scope '@quiet/eslint-config' || true
