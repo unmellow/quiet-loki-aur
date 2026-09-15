@@ -10,7 +10,7 @@ _pkgname=quiet-loki
 _electron=electron32
 _nodever=20.20.1
 pkgver=r1.g60e81232
-pkgrel=7
+pkgrel=8
 pkgdesc="Quiet desktop chat with dual Tor + Lokinet overlay (.onion and .loki)"
 arch=('x86_64')
 url="https://github.com/unmellow/quiet-loki"
@@ -62,8 +62,14 @@ build() {
 
   cd "${srcdir}/${_pkgname}"
 
+  # Neutralize lifecycle hooks that explode during lerna bootstrap:
+  #  - husky wants a .git dir in npm cache clones
+  #  - @quiet/backend prepare = webpack (needs compiled workspace first)
+  #  - @quiet/desktop prepare = webpack configtest + tsc
   find . -name package.json -print0 | xargs -0 sed -i \
-    -e 's/"prepare": "husky[^"]*"/"prepare": "true"/g' || true
+    -e 's/"prepare": "husky[^"]*"/"prepare": "true"/g' \
+    -e 's/"prepare": "npm run webpack"/"prepare": "true"/g' \
+    -e 's/"prepare": "npm run webpack:configtest:dev[^"]*"/"prepare": "true"/g' || true
 
   npm install --ignore-scripts --cache "${srcdir}/npm-cache" lerna@6.6.2 typescript@4.9.5
   npm install --ignore-scripts --cache "${srcdir}/npm-cache"
@@ -72,19 +78,22 @@ build() {
   npm run build:noise || true
   npm run build:orbitdb || true
 
-  npx lerna bootstrap --ignore '@quiet/mobile' --ignore 'e2e-tests'
+  # Link only. Compile in a defined order afterwards.
+  npx lerna bootstrap --ignore-scripts --ignore '@quiet/mobile' --ignore 'e2e-tests'
 
   npx lerna run build --scope '@quiet/types'
   npx lerna run build --scope '@quiet/logger'
   npx lerna run build --scope '@quiet/eslint-config' || true
   npx lerna run build --scope '@quiet/common'
-  npx lerna run build --scope '@quiet/identity' || true
+  npx lerna run build --scope '@quiet/identity'
   npx lerna run build --scope '@quiet/node-common' || true
   npx lerna run build --scope '@quiet/state-manager'
+  npx lerna run build --scope '@quiet/backend' || true
+  (cd packages/backend && npm run webpack:prod) || true
   npx lerna run build --scope 'backend-bundle' || true
 
   mkdir -p packages/desktop/node_modules/@quiet
-  for _pkg in common types state-manager node-common logger; do
+  for _pkg in common types state-manager node-common logger identity backend; do
     [[ -e "packages/desktop/node_modules/@quiet/${_pkg}" ]] && continue
     ln -sfn "../../${_pkg}" "packages/desktop/node_modules/@quiet/${_pkg}"
   done
